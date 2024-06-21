@@ -2,7 +2,9 @@ package org.development.authms.service;
 
 import org.development.authms.entity.User;
 import org.development.authms.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -10,14 +12,22 @@ import java.util.UUID;
 
 @Service
 public class UserService {
+
+    @Autowired
     private final UserRepository userRepository;
 
     public UserService(UserRepository userRepository) {
+
         this.userRepository = userRepository;
     }
 
+    @Transactional
     public User createUser(User user) {
+
         try {
+            if (userRepository.existsByEmail(user.getEmail())) {
+            throw new RuntimeException("This email already exists.");
+        }
             user.setReferenceKey(UUID.randomUUID().toString());
             User user1 = userRepository
                     .save(user);
@@ -29,14 +39,16 @@ public class UserService {
         }
     }
 
+    @Transactional
     public String deleteUser(Long id) {
-        try {
-             userRepository
-                    .deleteById(id);
+        Optional<User> userOptional = userRepository.findById(id);
+        if (userOptional.isPresent()) {
+            User user = userOptional.get();
+            user.setDeleted(true);
+            userRepository.save(user);
             return "Success";
-        } catch (Exception e) {
-            return e.getMessage();
         }
+        return "User not found";
     }
 
     public User findUserById(Long id) {
@@ -61,15 +73,30 @@ public class UserService {
 
     public User updateUser(User user) {
         try {
-            User existingUser = findUserByReferenceKey(user);
-            if (Objects.nonNull(existingUser)) {
+
+            Optional<User> existingUserOptional = userRepository.findByReferenceKey(user.getReferenceKey());
+            if (existingUserOptional.isPresent()) {
+                User existingUser = existingUserOptional.get();
+
                 user.setId(existingUser.getId());
                 user.setEmail(existingUser.getEmail());
-                return userRepository.save(user);
+
+                existingUser.setName(user.getName());
+                existingUser.setSurname(user.getSurname());
+                existingUser.setPassword(user.getPassword());
+                existingUser.setBirthDate(user.getBirthDate());
+                existingUser.setPhoneNumber(user.getPhoneNumber());
+
+                return userRepository.save(existingUser);
+            } else {
+                return null;
             }
-            return null;
         } catch (Exception e) {
             return null;
         }
+    }
+
+    public Optional<User> findUserByReferenceKey(String referenceKey) {
+        return userRepository.findByReferenceKey(referenceKey);
     }
 }
