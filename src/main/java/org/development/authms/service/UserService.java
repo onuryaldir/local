@@ -1,8 +1,10 @@
 package org.development.authms.service;
 
+import org.development.authms.entity.AuthRequest;
 import org.development.authms.entity.User;
 import org.development.authms.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +17,9 @@ public class UserService {
 
     @Autowired
     private final UserRepository userRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     public UserService(UserRepository userRepository) {
 
@@ -29,6 +34,7 @@ public class UserService {
             throw new RuntimeException("This email already exists.");
         }
             user.setReferenceKey(UUID.randomUUID().toString());
+            user.setPassword(passwordEncoder.encode(user.getPassword()));
             User user1 = userRepository
                     .save(user);
             user1.setMessage("Success");
@@ -60,6 +66,15 @@ public class UserService {
             return null;
         }
     }
+    public boolean authenticate(AuthRequest authRequest) {
+        try {
+            Optional<User> userOptional = userRepository
+                    .findByEmail(authRequest.getEmail());
+            return userOptional.filter(user -> verifyPassword(authRequest.getPassword(), user.getPassword())).isPresent();
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
     public User findUserByReferenceKey(User user) {
         try {
@@ -84,6 +99,7 @@ public class UserService {
                 existingUser.setName(user.getName());
                 existingUser.setSurname(user.getSurname());
                 existingUser.setPassword(user.getPassword());
+                existingUser.setPassword(passwordEncoder.encode(user.getPassword()));
                 existingUser.setBirthDate(user.getBirthDate());
                 existingUser.setPhoneNumber(user.getPhoneNumber());
 
@@ -98,5 +114,19 @@ public class UserService {
 
     public Optional<User> findUserByReferenceKey(String referenceKey) {
         return userRepository.findByReferenceKey(referenceKey);
+    }
+
+    public User findUserByEmail(String email) {
+        try {
+            Optional<User> userOptional = userRepository
+                    .findByEmail(email);
+            return userOptional.orElse(null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public boolean verifyPassword(String rawPassword, String encodedPassword) {
+        return passwordEncoder.matches(rawPassword, encodedPassword);
     }
 }

@@ -1,5 +1,7 @@
 package org.development.authms.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.SQLDelete;
@@ -27,7 +29,7 @@ public class User {
     @Column(name = "email",  unique = true, nullable = false)
     private String email;
 
-    @Column(name = "password", nullable = false)
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)    @Column(name = "password", nullable = false)
     private String password;
 
     @Column(name = "birthDate",  nullable = false)

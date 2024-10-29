@@ -1,7 +1,9 @@
 package org.development.authms.route;
 
+import org.development.authms.entity.AuthRequest;
 import org.development.authms.entity.User;
 import org.development.authms.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,8 +15,20 @@ import java.util.Objects;
 public class UserController {
     private final UserService service;
 
+
     public UserController(UserService service) {
         this.service = service;
+    }
+
+
+    @PostMapping("/validate")
+    public ResponseEntity<Boolean> validateUser(@RequestBody AuthRequest authRequest) {
+        try {
+
+            return ResponseEntity.ok(service.authenticate(authRequest));
+        } catch (Exception e) {
+            return ResponseEntity.ok( service.authenticate(authRequest));
+        }
     }
 
     @PostMapping("/create")
@@ -49,6 +63,15 @@ public class UserController {
         User updatedUser = service.updateUser(user);
         if (Objects.nonNull(updatedUser)) {
             return new ResponseEntity<>(updatedUser, HttpStatus.OK);
+        }
+        return new ResponseEntity<>(null, HttpStatus.BAD_REQUEST);
+    }
+
+    @GetMapping("/getByEmail/{email}")
+    public ResponseEntity<User> findByEmail(@PathVariable String email) {
+        User user = service.findUserByEmail(email);
+        if (Objects.nonNull(user)) {
+            return new ResponseEntity<>(user, HttpStatus.OK);
         }
         return new ResponseEntity<>(null, HttpStatus.BAD_REQUEST);
     }
