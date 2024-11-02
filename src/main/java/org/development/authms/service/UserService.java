@@ -1,8 +1,9 @@
 package org.development.authms.service;
 
-import org.development.authms.entity.AuthRequest;
-import org.development.authms.entity.User;
+import jakarta.ws.rs.NotFoundException;
+import org.development.authms.entity.*;
 import org.development.authms.repository.UserRepository;
+import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,10 @@ public class UserService {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+    @Autowired
+    private JwtService jwtService;
+
+    private final ModelMapper modelMapper = new ModelMapper();
 
     public UserService(UserRepository userRepository) {
 
@@ -27,7 +32,9 @@ public class UserService {
     }
 
     @Transactional
-    public User createUser(User user) {
+    public User createUser(RegisterRequest request) {
+
+        User user = convertToUser(request);
 
         try {
             if (userRepository.existsByEmail(user.getEmail())) {
@@ -66,13 +73,35 @@ public class UserService {
             return null;
         }
     }
-    public boolean authenticate(AuthRequest authRequest) {
+    public AuthResponse authenticate(AuthRequest authRequest) {
+        AuthResponse response = new AuthResponse();
+
         try {
+
             Optional<User> userOptional = userRepository
                     .findByEmail(authRequest.getEmail());
-            return userOptional.filter(user -> verifyPassword(authRequest.getPassword(), user.getPassword())).isPresent();
-        } catch (Exception e) {
-            return false;
+           userOptional.filter(user -> verifyPassword(authRequest.getPassword(),user.getPassword())).ifPresentOrElse(user ->{
+               response.setEmail(user.getEmail());
+               response.setId(user.getId());
+               response.setPhoneNumber(user.getPhoneNumber());
+               response.setName(user.getName());
+               response.setDeleted(user.isDeleted());
+               response.setSurname(user.getSurname());
+               response.setBirthDate(user.getBirthDate());
+               response.setAccessToken(jwtService.generate(user.getEmail(),"ACCESS"));
+               response.setRefreshToken(jwtService.generate(user.getEmail(),"REFRESH"));
+               response.setReferenceKey(user.getReferenceKey());
+               response.setMessage("Success");
+           }, () -> {
+
+               response.setMessage("Invalid Credentials");
+           } );
+
+           return response;
+        } catch (Exception e){
+
+            response.setMessage(e.getMessage());
+           return response;
         }
     }
 
@@ -86,30 +115,27 @@ public class UserService {
         }
     }
 
-    public User updateUser(User user) {
-        try {
+    public User updateUser(Long userId, UpdateUserRequest updateRequest) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
 
-            Optional<User> existingUserOptional = userRepository.findByReferenceKey(user.getReferenceKey());
-            if (existingUserOptional.isPresent()) {
-                User existingUser = existingUserOptional.get();
-
-                user.setId(existingUser.getId());
-                user.setEmail(existingUser.getEmail());
-
-                existingUser.setName(user.getName());
-                existingUser.setSurname(user.getSurname());
-                existingUser.setPassword(user.getPassword());
-                existingUser.setPassword(passwordEncoder.encode(user.getPassword()));
-                existingUser.setBirthDate(user.getBirthDate());
-                existingUser.setPhoneNumber(user.getPhoneNumber());
-
-                return userRepository.save(existingUser);
-            } else {
-                return null;
-            }
-        } catch (Exception e) {
-            return null;
+        if (updateRequest.getName() != null) {
+            user.setName(updateRequest.getName());
         }
+        if (updateRequest.getSurname() != null) {
+            user.setSurname(updateRequest.getSurname());
+        }
+        if (updateRequest.getPassword() != null) {
+            user.setPassword(passwordEncoder.encode(updateRequest.getPassword()));
+        }
+        if (updateRequest.getBirthDate() != null) {
+            user.setBirthDate(updateRequest.getBirthDate());
+        }
+        if (updateRequest.getPhoneNumber() != null) {
+            user.setPhoneNumber(updateRequest.getPhoneNumber());
+        }
+
+        return userRepository.save(user);
     }
 
     public Optional<User> findUserByReferenceKey(String referenceKey) {
@@ -128,5 +154,38 @@ public class UserService {
 
     public boolean verifyPassword(String rawPassword, String encodedPassword) {
         return passwordEncoder.matches(rawPassword, encodedPassword);
+    }
+
+    public AuthResponse refresh(String token) {
+
+        String email =jwtService.getAllClaimsFromToken(token).get("email").toString();
+        AuthResponse response = new AuthResponse();
+
+        Optional<User> userOptional = userRepository
+                .findByEmail(email);
+        userOptional.ifPresentOrElse(user ->{
+            response.setEmail(user.getEmail());
+            response.setId(user.getId());
+            response.setPhoneNumber(user.getPhoneNumber());
+            response.setName(user.getName());
+            response.setDeleted(user.isDeleted());
+            response.setSurname(user.getSurname());
+            response.setBirthDate(user.getBirthDate());
+            response.setAccessToken(jwtService.generate(user.getEmail(),"ACCESS"));
+            response.setRefreshToken(jwtService.generate(user.getEmail(),"REFRESH"));
+            response.setReferenceKey(user.getReferenceKey());
+            response.setMessage("Success");
+        }, ()-> {response.setMessage("Invalid Credentials");} );
+
+        return response;
+
+    }
+
+
+    public User convertToUser(RegisterRequest registerRequest) {
+        User user = modelMapper.map(registerRequest, User.class);
+        user.setReferenceKey(UUID.randomUUID().toString());
+        user.setDeleted(false);
+        return user;
     }
 }
